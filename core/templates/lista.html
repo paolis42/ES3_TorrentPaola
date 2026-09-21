@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <title>GeekMatch Trips - Registros</title>
 </head>
+
 <body>
 
     <h1>GeekMatch Trips</h1>
@@ -11,13 +13,30 @@
     <p>
         Usuario: <strong>{{ request.user.username }}</strong>
         |
-        <a href="{% url 'logout' %}">Cerrar sesión</a>
+
+        <form method="post"
+              action="{% url 'logout' %}"
+              style="display:inline;">
+            {% csrf_token %}
+            <button type="submit">Cerrar sesión</button>
+        </form>
     </p>
+
+    {% if messages %}
+        {% for message in messages %}
+            <p style="color: green;">
+                {{ message }}
+            </p>
+        {% endfor %}
+    {% endif %}
 
     <h2>Lugares evaluados</h2>
 
     {% if puede_crear %}
-        <a href="{% url 'crear' %}">Agregar nuevo lugar</a>
+        <a href="{% url 'crear' %}">
+            Agregar nuevo lugar
+        </a>
+
         <br><br>
     {% endif %}
 
@@ -40,43 +59,49 @@
             </tr>
 
             {% for registro in registros %}
-            <tr>
 
-                <td>{{ registro.nombre_lugar }}</td>
+                <tr>
 
-                <td>
-                    {{ registro.nivel_interes }}
-                </td>
+                    <td>
+                        {{ registro.nombre_lugar }}
+                    </td>
 
-                <td>
-                    {{ registro.precio }}
-                </td>
+                    <td>
+                        {{ registro.nivel_interes }}
+                    </td>
 
-                <td>
-                    {{ registro.presupuesto }}
-                </td>
+                    <td>
+                        {{ registro.precio }}
+                    </td>
 
-                <td>
-                    {{ registro.resultado }}
-                </td>
+                    <td>
+                        {{ registro.presupuesto }}
+                    </td>
 
-                {% if es_admin %}
-                <td>
+                    <td>
+                        {{ registro.resultado }}
+                    </td>
 
-                    <a href="{% url 'editar' registro.id %}">
-                        Editar
-                    </a>
+                    {% if es_admin %}
 
-                    |
+                        <td>
 
-                    <a href="{% url 'eliminar' registro.id %}">
-                        Eliminar
-                    </a>
+                            <a href="{% url 'editar' registro.id %}">
+                                Editar
+                            </a>
 
-                </td>
-                {% endif %}
+                            |
 
-            </tr>
+                            <a href="{% url 'eliminar' registro.id %}">
+                                Eliminar
+                            </a>
+
+                        </td>
+
+                    {% endif %}
+
+                </tr>
+
             {% endfor %}
 
         </table>
@@ -88,4 +113,5 @@
     {% endif %}
 
 </body>
+
 </html>

@@ -1,3 +1,4 @@
+from django.contrib import messages
 from django.contrib.auth import (
     authenticate,
     login as auth_login,
@@ -6,6 +7,8 @@ from django.contrib.auth import (
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import render, redirect, get_object_or_404
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
 
 from solucion import decidir
 from .models import Registro
@@ -30,8 +33,52 @@ def puede_crear(user):
 
 
 # -------------------------------------------------
-# READ - MOSTRAR REGISTROS
-# viewer, normal y admin pueden ver
+# VALIDACIÓN COMPARTIDA
+# -------------------------------------------------
+
+def leer_datos_formulario(request):
+    nombre_lugar = request.POST.get("nombre_lugar", "").strip()
+
+    try:
+        nivel_interes = int(
+            request.POST.get("nivel_interes", "")
+        )
+        precio = int(
+            request.POST.get("precio", "")
+        )
+        presupuesto = int(
+            request.POST.get("presupuesto", "")
+        )
+
+    except ValueError:
+        return None, (
+            "Interés, precio y presupuesto deben ser números enteros."
+        )
+
+    if not nombre_lugar:
+        return None, "El nombre del lugar es obligatorio."
+
+    if nivel_interes < 1 or nivel_interes > 5:
+        return None, "El nivel de interés debe estar entre 1 y 5."
+
+    if precio < 0:
+        return None, "El precio no puede ser negativo."
+
+    if presupuesto < 0:
+        return None, "El presupuesto no puede ser negativo."
+
+    datos = {
+        "nombre_lugar": nombre_lugar,
+        "nivel_interes": nivel_interes,
+        "precio": precio,
+        "presupuesto": presupuesto,
+    }
+
+    return datos, None
+
+
+# -------------------------------------------------
+# READ
 # -------------------------------------------------
 
 @login_required(login_url="login")
@@ -50,8 +97,7 @@ def lista(request):
 
 
 # -------------------------------------------------
-# CREATE - CREAR REGISTRO
-# admin y normal pueden crear
+# CREATE
 # -------------------------------------------------
 
 @login_required(login_url="login")
@@ -63,46 +109,29 @@ def crear(request):
     error = None
 
     if request.method == "POST":
-        nombre_lugar = request.POST.get(
-            "nombre_lugar",
-            ""
-        ).strip()
 
-        try:
-            nivel_interes = int(
-                request.POST.get("nivel_interes", "")
-            )
+        datos, error = leer_datos_formulario(request)
 
-            precio = int(
-                request.POST.get("precio", "")
-            )
+        if error is None:
 
-            presupuesto = int(
-                request.POST.get("presupuesto", "")
-            )
-
-        except ValueError:
-            error = (
-                "Interés, precio y presupuesto "
-                "deben ser números enteros."
-            )
-
-        else:
-            # Reutilizamos la regla de negocio
-            # definida en solucion.py
             resultado, motivo = decidir(
-                nivel_interes,
-                precio,
-                presupuesto
+                datos["nivel_interes"],
+                datos["precio"],
+                datos["presupuesto"],
             )
 
             Registro.objects.create(
-                nombre_lugar=nombre_lugar,
-                nivel_interes=nivel_interes,
-                precio=precio,
-                presupuesto=presupuesto,
+                nombre_lugar=datos["nombre_lugar"],
+                nivel_interes=datos["nivel_interes"],
+                precio=datos["precio"],
+                presupuesto=datos["presupuesto"],
                 resultado=resultado,
                 motivo=motivo,
+            )
+
+            messages.success(
+                request,
+                "Lugar creado correctamente."
             )
 
             return redirect("lista")
@@ -112,14 +141,13 @@ def crear(request):
         "form.html",
         {
             "accion": "Crear",
-            "error": error
+            "error": error,
         }
     )
 
 
 # -------------------------------------------------
-# UPDATE - EDITAR REGISTRO
-# solo admin puede editar
+# UPDATE
 # -------------------------------------------------
 
 @login_required(login_url="login")
@@ -137,47 +165,30 @@ def editar(request, pk):
     error = None
 
     if request.method == "POST":
-        nombre_lugar = request.POST.get(
-            "nombre_lugar",
-            ""
-        ).strip()
 
-        try:
-            nivel_interes = int(
-                request.POST.get("nivel_interes", "")
-            )
+        datos, error = leer_datos_formulario(request)
 
-            precio = int(
-                request.POST.get("precio", "")
-            )
+        if error is None:
 
-            presupuesto = int(
-                request.POST.get("presupuesto", "")
-            )
-
-        except ValueError:
-            error = (
-                "Interés, precio y presupuesto "
-                "deben ser números enteros."
-            )
-
-        else:
-            # Se vuelve a calcular el resultado
-            # al editar los datos
             resultado, motivo = decidir(
-                nivel_interes,
-                precio,
-                presupuesto
+                datos["nivel_interes"],
+                datos["precio"],
+                datos["presupuesto"],
             )
 
-            registro.nombre_lugar = nombre_lugar
-            registro.nivel_interes = nivel_interes
-            registro.precio = precio
-            registro.presupuesto = presupuesto
+            registro.nombre_lugar = datos["nombre_lugar"]
+            registro.nivel_interes = datos["nivel_interes"]
+            registro.precio = datos["precio"]
+            registro.presupuesto = datos["presupuesto"]
             registro.resultado = resultado
             registro.motivo = motivo
 
             registro.save()
+
+            messages.success(
+                request,
+                "Lugar actualizado correctamente."
+            )
 
             return redirect("lista")
 
@@ -187,14 +198,13 @@ def editar(request, pk):
         {
             "accion": "Editar",
             "registro": registro,
-            "error": error
+            "error": error,
         }
     )
 
 
 # -------------------------------------------------
 # DELETE LÓGICO
-# solo admin puede eliminar
 # -------------------------------------------------
 
 @login_required(login_url="login")
@@ -211,6 +221,12 @@ def eliminar(request, pk):
 
     if request.method == "POST":
         registro.soft_delete()
+
+        messages.success(
+            request,
+            "Lugar eliminado correctamente."
+        )
+
         return redirect("lista")
 
     return render(
@@ -229,7 +245,14 @@ def eliminar(request, pk):
 def iniciar_sesion(request):
     error = None
 
+    next_url = (
+        request.POST.get("next")
+        or request.GET.get("next")
+        or ""
+    )
+
     if request.method == "POST":
+
         username = request.POST.get(
             "username",
             ""
@@ -248,6 +271,16 @@ def iniciar_sesion(request):
 
         if usuario is not None:
             auth_login(request, usuario)
+
+            if (
+                next_url
+                and url_has_allowed_host_and_scheme(
+                    next_url,
+                    allowed_hosts={request.get_host()},
+                )
+            ):
+                return redirect(next_url)
+
             return redirect("lista")
 
         error = "Usuario o contraseña incorrectos."
@@ -256,7 +289,8 @@ def iniciar_sesion(request):
         request,
         "login.html",
         {
-            "error": error
+            "error": error,
+            "next": next_url,
         }
     )
 
@@ -265,6 +299,8 @@ def iniciar_sesion(request):
 # LOGOUT
 # -------------------------------------------------
 
+@login_required(login_url="login")
+@require_POST
 def cerrar_sesion(request):
     auth_logout(request)
     return redirect("login")

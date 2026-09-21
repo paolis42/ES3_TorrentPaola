@@ -27,6 +27,15 @@ for username, grupo, password in usuarios:
 
     usuario.set_password(password)
     usuario.is_active = True
+
+    # Solo el usuario admin puede entrar al panel /admin/
+    if grupo == "admin":
+        usuario.is_staff = True
+        usuario.is_superuser = True
+    else:
+        usuario.is_staff = False
+        usuario.is_superuser = False
+
     usuario.save()
 
     usuario.groups.clear()

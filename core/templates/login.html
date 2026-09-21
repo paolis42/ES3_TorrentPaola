@@ -16,6 +16,8 @@
     <form method="POST">
         {% csrf_token %}
 
+        <input type="hidden" name="next" value="{{ next }}">
+
         <label>Usuario:</label><br>
         <input type="text" name="username" required>
 
