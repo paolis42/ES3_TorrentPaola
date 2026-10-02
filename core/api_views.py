@@ -6,9 +6,17 @@ from solucion import decidir
 from .models import Registro
 from .serializers import RegistroSerializer
 
+from rest_framework.permissions import IsAuthenticated
+from .permissions import PermisosRegistro
+
 
 class RegistroViewSet(viewsets.ModelViewSet):
     serializer_class = RegistroSerializer
+
+    permission_classes = [
+        IsAuthenticated,
+        PermisosRegistro,
+    ]
 
     def get_queryset(self):
         return Registro.objects.filter(

@@ -1,560 +1,442 @@
-# Uso de Inteligencia Artificial - GeekMatch Trips
+# Uso de Inteligencia Artificial - GeekMatch Trips ES3
 
 ## Herramientas utilizadas
 
-Durante el desarrollo de GeekMatch Trips utilicé las siguientes herramientas de apoyo:
+Durante el desarrollo de la ES3 de GeekMatch Trips utilicé:
 
-- ChatGPT, para realizar consultas, recibir explicaciones, revisar código y comprender los pasos necesarios para implementar la evaluación.
-- GitHub Copilot, como apoyo dentro de Visual Studio Code mediante sugerencias de código.
+- ChatGPT, para realizar consultas, comprender Django REST Framework, revisar código y apoyar las pruebas de la API.
+- GitHub Copilot, como apoyo mediante sugerencias dentro de Visual Studio Code.
 
-La IA fue utilizada como herramienta de consulta y apoyo. Las propuestas fueron revisadas, adaptadas al proyecto y probadas manualmente antes de ser incorporadas.
-
----
-
-## Trabajo realizado y comprobado durante el desarrollo
-
-Durante la evaluación trabajé directamente desde Visual Studio Code y fui probando el funcionamiento de cada parte del proyecto.
-
-Entre las tareas realizadas y verificadas se encuentran:
-
-- configuración del entorno virtual;
-- instalación y uso de Django;
-- creación y modificación del modelo `Registro`;
-- creación y ejecución de migraciones;
-- uso de SQLite;
-- comprobación de migraciones pendientes;
-- configuración de Django Admin;
-- configuración del usuario administrador;
-- prueba del buscador y filtros del administrador;
-- implementación del CRUD;
-- creación de registros;
-- edición de registros;
-- recálculo del resultado después de editar;
-- implementación y comprobación del borrado lógico;
-- implementación de inicio y cierre de sesión;
-- creación de los grupos `admin`, `normal` y `viewer`;
-- creación de usuarios de prueba;
-- comprobación de restricciones mediante acceso directo a las URLs;
-- comprobación de respuestas `403 Forbidden`;
-- validación de datos en el servidor;
-- creación de pruebas automáticas;
-- ejecución de `python manage.py test`;
-- actualización del repositorio GitHub durante el desarrollo.
+La inteligencia artificial fue utilizada como herramienta de apoyo. Las propuestas fueron revisadas, adaptadas y probadas antes de incorporarlas al proyecto.
 
 ---
 
-# Consultas realizadas a la IA
+## Consulta 1: Serializer y campos expuestos
 
-## 1. Consulta sobre el modelo y SQLite
+### Qué le pedí a la IA
 
-### Pregunta realizada
+Pregunté cómo transformar el modelo `Registro` de GeekMatch Trips en un serializer para poder entregar y recibir información mediante JSON.
 
-> ¿Cómo adapto el modelo de la guía a GeekMatch Trips para guardar nombre del lugar, nivel de interés, precio, presupuesto, resultado y motivo en SQLite?
+### Qué respondió la IA
 
-### Respuesta de la IA
+La IA propuso utilizar `ModelSerializer` de Django REST Framework y enumerar los campos que serían expuestos por la API.
 
-La IA propuso crear un modelo de Django llamado `Registro` y convertir los datos que anteriormente se guardaban en `datos.json` en campos del modelo.
+También recomendó marcar como `read_only` los campos que no deberían ser definidos directamente por el cliente.
 
-También sugirió utilizar tipos de campo de Django según el tipo de dato:
+### Qué revisé o corregí
 
-- `CharField` para textos;
-- `IntegerField` para los valores numéricos;
-- `DateTimeField` para las fechas;
-- `BooleanField` para indicar si un registro fue eliminado.
+No utilicé:
 
-Después propuso crear las tablas mediante:
+```python
+fields = "__all__"
+```
 
-`python manage.py makemigrations`
+porque eso expondría automáticamente todos los campos del modelo.
 
-y:
+Preferí enumerarlos explícitamente:
 
-`python manage.py migrate`
+```python
+fields = [
+    "id",
+    "nombre_lugar",
+    "nivel_interes",
+    "precio",
+    "presupuesto",
+    "resultado",
+    "motivo",
+    "fecha",
+    "eliminado",
+    "fecha_eliminacion",
+]
+```
 
-### Qué corregí o adapté
+Además se definieron como solo lectura:
 
-No utilicé directamente los nombres de campos genéricos que aparecían en algunos ejemplos.
+```python
+read_only_fields = [
+    "resultado",
+    "motivo",
+    "fecha",
+    "eliminado",
+    "fecha_eliminacion",
+]
+```
 
-El modelo fue adaptado específicamente a GeekMatch Trips utilizando:
+### Qué hice finalmente
 
-- `nombre_lugar`;
-- `nivel_interes`;
-- `precio`;
-- `presupuesto`;
-- `resultado`;
-- `motivo`;
-- `fecha`;
-- `eliminado`;
-- `fecha_eliminacion`.
+Creé:
 
-También incorporé borrado lógico mediante `soft_delete()` para que los registros no sean eliminados físicamente de la base de datos.
+```text
+core/serializers.py
+```
 
-Después comprobé que las migraciones estuvieran sincronizadas ejecutando:
+con validaciones para:
 
-`python manage.py makemigrations --check --dry-run`
+- nombre obligatorio;
+- interés entre 1 y 5;
+- precio no negativo;
+- presupuesto no negativo.
 
-El resultado fue:
+Durante las pruebas comprobé que un nivel de interés igual a `99` fuera rechazado con:
 
-`No changes detected`
+```text
+400 Bad Request
+```
 
----
-
-## 2. Consulta sobre la reutilización de la regla de decisión
-
-### Pregunta realizada
-
-> ¿Debo copiar los if y elif de la función decidir() dentro de las vistas de Django?
-
-### Respuesta de la IA
-
-La IA indicó que no era necesario copiar nuevamente la regla de decisión.
-
-Propuso mantener la función `decidir()` dentro de `solucion.py` y reutilizarla desde Django mediante:
-
-`from solucion import decidir`
-
-### Qué corregí o adapté
-
-Revisé que la cadena de `if`, `elif` y `else` no quedara repetida dentro de `views.py`.
-
-La regla se mantuvo solamente en `solucion.py`.
-
-También comprobé que `decidir()` se ejecutara nuevamente durante la edición de un registro, porque modificar:
-
-- nivel de interés;
-- precio;
-- presupuesto;
-
-puede cambiar el resultado.
-
-Durante las pruebas se comprobó que al reducir el nivel de interés de un registro, el resultado cambiara desde `Recomendado` a `No recomendado por baja afinidad`.
+y un mensaje indicando el problema.
 
 ---
 
-## 3. Consulta sobre el cambio desde JSON a SQLite
+## Consulta 2: Cómo reutilizar decidir() desde la API
 
-### Pregunta realizada
+### Qué le pedí a la IA
 
-> Mi views.py todavía tiene import json, datos.json y settings.BASE_DIR. ¿Debo mantener eso ahora que la evaluación pide SQLite?
+Consulté cómo hacer que la API siguiera utilizando la regla de negocio de GeekMatch Trips sin volver a escribir los `if` y `elif` dentro del ViewSet.
 
-### Respuesta de la IA
+### Qué respondió la IA
 
-La IA explicó que `datos.json` pertenecía a la versión anterior y que las nuevas vistas debían utilizar el modelo `Registro` mediante Django ORM.
+La IA recomendó importar la función existente:
 
-Propuso reemplazar la lectura y escritura del JSON por operaciones como:
+```python
+from solucion import decidir
+```
 
-- `Registro.objects.create()`;
-- `Registro.objects.filter()`;
-- `registro.save()`.
+y ejecutarla dentro de las operaciones de creación y actualización.
 
-### Qué corregí o adapté
+Para CREATE se propuso utilizar:
 
-Eliminé de las vistas el almacenamiento mediante JSON.
+```python
+perform_create()
+```
 
-`datos.json` dejó de ser la fuente principal de persistencia y los registros pasaron a almacenarse en SQLite.
+y para UPDATE:
 
-Se mantuvo `datos.json` únicamente como archivo de datos anteriores y se creó `cargar_datos.py` para poder importar esos registros a SQLite.
+```python
+perform_update()
+```
 
----
+### Qué revisé o corregí
 
-## 4. Consulta sobre CRUD
+Comprobé que la API no aceptara `resultado` y `motivo` enviados por el cliente.
 
-### Pregunta realizada
+Esos campos debían continuar siendo calculados por el proyecto.
 
-> ¿Cómo organizo CREATE, READ, UPDATE y DELETE usando el modelo Registro sin volver a escribir la función decidir()?
+También fue necesario considerar PATCH, porque en una actualización parcial no siempre llegan todos los campos.
 
-### Respuesta de la IA
+Por este motivo, en `perform_update()` se utilizan los valores nuevos cuando existen y los valores anteriores cuando un campo no fue enviado.
 
-La IA propuso separar las operaciones en cuatro vistas:
+### Qué hice finalmente
 
-- `lista`;
-- `crear`;
-- `editar`;
-- `eliminar`.
+El ViewSet ejecuta nuevamente `decidir()` tanto al crear como al actualizar.
 
-Para CREATE y UPDATE sugirió llamar nuevamente a `decidir()` antes de guardar.
+Se realizó una prueba PATCH modificando:
 
-Para DELETE sugirió utilizar el método de borrado lógico del modelo.
+```text
+nivel_interes = 1
+```
 
-### Qué corregí o adapté
+El resultado fue recalculado automáticamente a:
 
-Implementé las cuatro operaciones y las probé manualmente.
+```text
+No recomendado por baja afinidad
+```
 
-Para CREATE comprobé que se crearan nuevos registros en SQLite.
-
-Para READ comprobé que solo aparecieran los registros con:
-
-`eliminado=False`
-
-Para UPDATE comprobé que el resultado se recalculara automáticamente.
-
-Para DELETE comprobé que el registro desapareciera de la lista normal, pero siguiera existiendo en la base de datos con:
-
-`eliminado=True`
-
-y una fecha en:
-
-`fecha_eliminacion`.
-
-Posteriormente detecté que parte de la lectura de los datos POST estaba duplicada entre `crear` y `editar`.
-
-Para disminuir esa duplicación se creó una función compartida:
-
-`leer_datos_formulario()`
-
-que se utiliza en ambas vistas.
+Esto confirmó que la API sigue utilizando la misma regla de negocio de la aplicación original.
 
 ---
 
-## 5. Consulta sobre login y roles
+## Consulta 3: Autenticación y seguridad de la API
 
-### Pregunta realizada
+### Qué le pedí a la IA
 
-> ¿Cómo puedo utilizar los grupos de Django para tener los roles admin, normal y viewer sin crear mi propio sistema de contraseñas?
+Consulté cómo proteger los endpoints de la API para que no pudieran ser utilizados sin autenticación y cómo mantener los roles `viewer`, `normal` y `admin`.
 
-### Respuesta de la IA
+### Qué respondió la IA
 
-La IA recomendó utilizar el sistema de autenticación que Django ya incluye y crear los grupos:
+La IA recomendó utilizar:
 
-- `admin`;
-- `normal`;
-- `viewer`.
+```python
+TokenAuthentication
+```
 
-También indicó que los permisos no debían depender solamente de ocultar botones en las plantillas.
+junto con:
 
-### Qué corregí o adapté
+```python
+IsAuthenticated
+```
 
-Inicialmente ocultar los botones según el usuario parecía suficiente.
+También se propuso crear una clase personalizada de permisos para diferenciar las operaciones permitidas según el grupo del usuario.
 
-Después comprendí que eso no representa seguridad real porque una persona puede escribir directamente una URL en el navegador.
+### Qué estaba incompleto
 
-Por ese motivo las restricciones se implementaron también dentro de las vistas del servidor.
+Utilizar únicamente:
 
-Cuando un usuario intenta realizar una acción para la que no tiene autorización, la vista utiliza:
+```python
+IsAuthenticated
+```
 
-`raise PermissionDenied`
+permite comprobar que el usuario inició sesión mediante token, pero no diferencia qué operaciones puede realizar cada rol.
 
-Las pruebas realizadas fueron:
+Un `viewer` autenticado podría intentar utilizar las mismas rutas que un `admin` si no existiera una segunda validación.
+
+También comprendí que ocultar botones en HTML no sirve como protección para una API, porque las peticiones se pueden enviar directamente.
+
+### Qué hice finalmente
+
+Creé:
+
+```text
+core/permissions.py
+```
+
+con una clase:
+
+```python
+PermisosRegistro
+```
+
+Los permisos quedaron definidos así:
 
 ### viewer
 
 Puede:
 
-- iniciar sesión;
-- visualizar registros.
+- GET.
 
-Recibe `403 Forbidden` al intentar:
+No puede:
 
-- crear;
-- editar;
-- eliminar.
+- POST;
+- PUT;
+- PATCH;
+- DELETE.
 
 ### normal
 
 Puede:
 
-- iniciar sesión;
-- visualizar;
-- crear.
+- GET;
+- POST.
 
-Recibe `403 Forbidden` al intentar:
+No puede:
 
-- editar;
-- eliminar.
+- PUT;
+- PATCH;
+- DELETE.
 
 ### admin
 
-Puede:
+Puede realizar todas las operaciones.
 
-- visualizar;
-- crear;
-- editar;
-- eliminar.
+Se comprobó la diferencia entre:
 
-Después de una revisión adicional también se corrigió `crear_usuarios.py`.
+```text
+401 Unauthorized
+```
 
-La primera versión agregaba al usuario al grupo `admin`, pero eso no le daba automáticamente acceso al panel administrativo de Django.
+cuando no se envía un token,
 
-Se corrigió configurando al usuario administrador con:
+y:
 
-- `is_staff=True`;
-- `is_superuser=True`.
+```text
+403 Forbidden
+```
 
-Después de este cambio comprobé que el usuario `admin` pudiera ingresar correctamente a:
+cuando el usuario está autenticado pero no tiene permiso.
 
-`/admin/`
-
----
-
-## 6. Consulta sobre validaciones
-
-### Pregunta realizada
-
-> ¿Es suficiente validar los campos con required en el formulario HTML y dejar que decidir() marque los datos inválidos?
-
-### Respuesta de la IA
-
-En una primera versión las validaciones principales estaban en el formulario HTML y se utilizaba `try/except` para evitar errores al convertir los valores numéricos mediante `int()`.
-
-La función `decidir()` también podía devolver:
-
-`Dato inválido`
-
-si los valores estaban fuera de rango.
-
-### Qué corregí o adapté
-
-Posteriormente se comprobó que las validaciones HTML pueden evitarse enviando una petición directamente al servidor.
-
-Por ejemplo, era posible enviar:
-
-- nombre vacío;
-- interés `99`;
-- precio `-500`.
-
-Aunque `decidir()` marcaba esos valores como inválidos, el registro igualmente podía guardarse.
-
-Por ese motivo agregué validaciones directamente en `views.py` antes de realizar `Registro.objects.create()` o `save()`.
-
-Actualmente el servidor rechaza:
-
-- nombre vacío;
-- nivel de interés menor que 1;
-- nivel de interés mayor que 5;
-- precio negativo;
-- presupuesto negativo;
-- valores numéricos que no puedan convertirse a entero.
-
-Durante las pruebas comprobé que:
-
-`nivel_interes=99`
-
-mostrara:
-
-`El nivel de interés debe estar entre 1 y 5.`
-
-También comprobé que:
-
-`precio=-500`
-
-mostrara:
-
-`El precio no puede ser negativo.`
-
-El registro no se guarda mientras exista un error de validación.
+Por ejemplo, `viewer` recibió `403` al intentar hacer POST y `normal` recibió `403` al intentar hacer PATCH.
 
 ---
 
-## 7. Consulta sobre pruebas automáticas
+## Consulta 4: Uso del token desde PowerShell
 
-### Pregunta realizada
+### Qué le pedí a la IA
 
-> ¿Qué pruebas automáticas mínimas puedo agregar para comprobar la regla de decisión, los permisos y el borrado lógico?
+Consulté cómo obtener los tokens de los usuarios y utilizarlos para probar los endpoints desde PowerShell.
 
-### Respuesta de la IA
+### Qué respondió la IA
 
-La IA propuso agregar pruebas mediante `django.test.TestCase`.
+La IA propuso guardar el token en una variable y crear una cabecera:
 
-Se seleccionaron tres casos diferentes:
+```powershell
+$headers = @{
+    Authorization = "Token TOKEN"
+}
+```
 
-1. comprobar una rama de `decidir()`;
-2. comprobar que un usuario sin permiso reciba `403`;
-3. comprobar que el borrado lógico no elimine físicamente la fila.
+### Qué problema encontré
 
-### Qué corregí o adapté
+Al obtener el token mediante:
 
-Hasta ese momento las pruebas estaban realizadas principalmente de forma manual y `python manage.py test` ejecutaba cero pruebas.
+```text
+python manage.py shell -c ...
+```
 
-Por este motivo agregué tres pruebas dentro de:
+la salida de Django incluía texto adicional.
 
-`core/tests.py`
+Al guardar toda esa salida dentro de una variable, el token contenía espacios y Django REST Framework no lo reconocía correctamente.
 
-Las pruebas verifican:
+La API respondía indicando que las credenciales no habían sido proporcionadas correctamente.
 
-### Test 1 - Regla de decisión
+### Qué corregí
 
-Comprueba que una actividad con alto interés y dentro del presupuesto obtenga:
+Se modificó el comando para conservar solamente la última línea y eliminar espacios:
 
-`Recomendado`
+```powershell
+Select-Object -Last 1
+```
 
-### Test 2 - Permisos
+y:
 
-Comprueba que un usuario perteneciente al grupo `viewer` reciba:
+```powershell
+.Trim()
+```
 
-`HTTP 403`
+Después se comprobó que la longitud del token fuera la esperada antes de utilizarlo.
 
-al intentar acceder a la vista de creación.
+### Qué hice finalmente
 
-### Test 3 - Borrado lógico
+Los tokens fueron utilizados únicamente mediante la cabecera:
 
-Comprueba que después de ejecutar `soft_delete()`:
+```text
+Authorization: Token TOKEN_DEL_USUARIO
+```
 
-- `eliminado` sea `True`;
-- `fecha_eliminacion` tenga un valor;
-- el registro siga existiendo físicamente en la base de datos.
-
-Después ejecuté:
-
-`python manage.py test`
-
-El resultado fue:
-
-`Found 3 test(s).`
-
-`Ran 3 tests`
-
-`OK`
+No se almacenaron tokens reales en el código, README ni URLs.
 
 ---
 
-# Otras correcciones realizadas
+## Consulta 5: Borrado mediante DELETE
 
-## Corrección de un nombre de campo
+### Qué le pedí a la IA
 
-Durante el desarrollo apareció una referencia incorrecta:
+Consulté cómo adaptar DELETE de Django REST Framework para mantener el borrado lógico que ya tenía GeekMatch Trips.
 
-`nivel_interres`
+### Qué respondió la IA
 
-Se corrigió por:
+La operación DELETE estándar de un `ModelViewSet` elimina físicamente el registro.
 
-`nivel_interes`
+La propuesta fue sobrescribir:
 
-para que coincidiera con el nombre real del campo.
+```python
+destroy()
+```
 
----
+y ejecutar el método existente:
 
-## Validación de números
+```python
+soft_delete()
+```
 
-Se utiliza `try/except` al convertir los valores enviados por el formulario.
+### Qué revisé
 
-Esto evita que la aplicación termine con un error si se intenta ingresar texto en un campo que debe ser numérico.
+No quería cambiar el comportamiento que ya había sido implementado y probado en la ES2.
 
-Además de la conversión, actualmente existen validaciones de rango en el servidor.
+El registro debía desaparecer de la API, pero seguir existiendo en SQLite.
 
----
+### Qué hice finalmente
 
-## Configuración del administrador
+La operación DELETE ejecuta:
 
-El modelo `Registro` fue configurado en Django Admin con:
+```python
+registro.soft_delete()
+```
 
-- columnas personalizadas;
-- filtro por resultado;
-- filtro por eliminado;
-- buscador por nombre;
-- fechas de solo lectura.
+y responde:
 
-También se corrigió el usuario creado mediante `crear_usuarios.py` para permitir que el usuario `admin` pueda ingresar al administrador.
+```text
+204 No Content
+```
 
----
+Después se verificó directamente en Django que el registro todavía existiera y tuviera:
 
-## Seguridad de información sensible
+```text
+eliminado = True
+```
 
-La `SECRET_KEY` y las contraseñas utilizadas por los usuarios de prueba se almacenan dentro del archivo:
+junto con una fecha en:
 
-`.env`
-
-Este archivo está excluido mediante `.gitignore`.
-
-El archivo:
-
-`.env.example`
-
-solo contiene los nombres de las variables y no incluye contraseñas reales.
-
----
-
-# Pruebas realizadas
-
-## Base de datos
-
-Se comprobó:
-
-- creación de migraciones;
-- ejecución de migraciones;
-- funcionamiento sobre SQLite;
-- ausencia de migraciones pendientes;
-- creación de la base desde un clon limpio.
-
-## Django Admin
-
-Se comprobó:
-
-- visualización del modelo `Registro`;
-- columnas personalizadas;
-- buscador por nombre;
-- filtros;
-- acceso del usuario administrador.
-
-## CRUD
-
-Se comprobó:
-
-- creación;
-- visualización;
-- edición;
-- recálculo del resultado;
-- borrado lógico.
-
-## Validaciones
-
-Se comprobó que no se guarden:
-
-- intereses fuera del rango 1 a 5;
-- precios negativos;
-- presupuestos negativos;
-- nombres vacíos.
-
-## Autenticación y autorización
-
-Se comprobó:
-
-- inicio de sesión;
-- cierre de sesión;
-- restricciones según rol;
-- acceso directo mediante URL;
-- respuestas `403 Forbidden`.
-
-## Pruebas automáticas
-
-Se ejecutó:
-
-`python manage.py test`
-
-Resultado:
-
-`Ran 3 tests`
-
-`OK`
+```text
+fecha_eliminacion
+```
 
 ---
 
-# Conclusión sobre el uso de IA
+# Pruebas realizadas con apoyo de IA
 
-La inteligencia artificial fue utilizada como herramienta de apoyo durante el desarrollo de GeekMatch Trips.
+Durante el desarrollo se realizaron pruebas sobre los endpoints.
 
-Se utilizó principalmente para:
+Se comprobaron los siguientes códigos:
 
-- resolver dudas;
-- comprender conceptos de Django;
-- revisar estructuras de código;
-- comprender migraciones;
-- organizar el CRUD;
-- implementar autenticación;
-- comprender grupos y permisos;
-- detectar duplicación;
-- implementar validaciones;
-- proponer pruebas automáticas.
+```text
+200 OK
+201 Created
+204 No Content
+400 Bad Request
+401 Unauthorized
+403 Forbidden
+404 Not Found
+```
 
-Las respuestas no fueron incorporadas automáticamente.
+Las evidencias quedaron almacenadas dentro de:
 
-Las propuestas fueron revisadas y adaptadas al proyecto, y en distintos momentos fue necesario corregirlas o complementarlas.
+```text
+pruebas/
+```
 
-Entre las correcciones más importantes se encuentran:
+Entre las pruebas realizadas se encuentran:
 
-- no depender solamente de botones ocultos para proteger acciones;
-- proteger las vistas mediante permisos del servidor;
-- configurar correctamente al usuario `admin` para acceder a Django Admin;
-- mover las validaciones desde el navegador hacia el servidor;
-- evitar duplicar la lectura del formulario entre CREATE y UPDATE;
-- agregar pruebas automáticas que puedan ejecutarse mediante `manage.py test`.
+- acceso sin token;
+- GET autenticado;
+- POST correcto;
+- POST con datos inválidos;
+- consulta de ID inexistente;
+- DELETE;
+- comprobación del borrado lógico;
+- GET de detalle;
+- PATCH con recálculo;
+- POST prohibido para `viewer`;
+- POST permitido para `normal`;
+- PATCH prohibido para `normal`.
 
-El proyecto evolucionó desde una primera versión que utilizaba `datos.json` hacia una aplicación Django con SQLite, CRUD, borrado lógico, autenticación, roles, validaciones del lado del servidor y pruebas automáticas.
+---
+
+# Evaluación crítica del uso de IA
+
+Las respuestas de inteligencia artificial no se incorporaron automáticamente.
+
+Durante el trabajo fue necesario:
+
+- adaptar los ejemplos genéricos al modelo real de GeekMatch Trips;
+- mantener la función `decidir()` en lugar de duplicar la lógica;
+- controlar explícitamente los campos expuestos por el serializer;
+- evitar depender únicamente de `IsAuthenticated`;
+- implementar permisos según los grupos existentes;
+- corregir la forma en que PowerShell obtenía y almacenaba el token;
+- comprobar manualmente los códigos HTTP;
+- mantener el borrado lógico de la ES2;
+- evitar incluir tokens y credenciales reales en la documentación.
+
+La IA fue útil para explicar herramientas y proponer estructuras, pero cada propuesta fue revisada mediante pruebas antes de considerarse parte de la solución final.
+
+---
+
+# Conclusión
+
+La inteligencia artificial permitió apoyar la migración de GeekMatch Trips desde una aplicación Django con vistas HTML hacia una aplicación que además ofrece una API RESTful.
+
+La solución final mantiene las funcionalidades de la ES2 y agrega:
+
+- Django REST Framework;
+- serializers;
+- ViewSet;
+- router;
+- JSON;
+- autenticación mediante token;
+- permisos diferenciados;
+- validaciones;
+- códigos HTTP;
+- paginación;
+- pruebas mediante cliente HTTP;
+- evidencias de funcionamiento.
+
+Las decisiones finales fueron tomadas después de revisar, adaptar y probar las propuestas recibidas.
