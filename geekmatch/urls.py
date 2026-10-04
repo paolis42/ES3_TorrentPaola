@@ -6,6 +6,16 @@ from rest_framework.routers import DefaultRouter
 from core import views
 from core.api_views import RegistroViewSet
 
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularSwaggerView,
+)
+
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+
 
 router = DefaultRouter()
 router.register(
@@ -40,4 +50,25 @@ urlpatterns = [
         obtain_auth_token,
         name="api_token",
     ),
+    path(
+    "api/jwt/",
+    TokenObtainPairView.as_view(),
+    name="jwt_obtain_pair",
+),
+path(
+    "api/jwt/refresh/",
+    TokenRefreshView.as_view(),
+    name="jwt_refresh",
+),
+    path(
+    "api/schema/",
+    SpectacularAPIView.as_view(),
+    name="schema",
+),
+path(
+    "api/docs/",
+    SpectacularSwaggerView.as_view(url_name="schema"),
+    name="swagger-ui",
+),
+
 ]

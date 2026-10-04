@@ -16,6 +16,9 @@ La API permite consultar, crear, editar y eliminar lógicamente registros de lug
 - SQLite
 - python-decouple
 - Token Authentication
+- JWT con djangorestframework-simplejwt
+- drf-spectacular
+- Swagger / OpenAPI
 
 ---
 
@@ -153,13 +156,15 @@ El servidor queda disponible en:
 http://127.0.0.1:8000/
 ```
 
-Las pantallas HTML desarrolladas en la ES2 continúan funcionando junto con la nueva API.
+La ruta raíz `/` no tiene una vista asociada, por lo que puede responder 404. Esto no afecta el funcionamiento del proyecto.
 
 El login HTML está disponible en:
 
 ```text
 http://127.0.0.1:8000/login/
 ```
+
+Las pantallas HTML desarrolladas en la ES2 continúan funcionando junto con la nueva API.
 
 ---
 
@@ -171,21 +176,30 @@ La API se encuentra bajo:
 /api/
 ```
 
-Las pantallas HTML de la ES2 continúan funcionando en paralelo con la API.
+Las vistas HTML de la ES2 continúan funcionando en paralelo con la API REST.
 
 ---
 
 ## Autenticación
 
-La API utiliza autenticación mediante token.
+La API soporta dos mecanismos de autenticación:
 
-Para solicitar un token se utiliza:
+1. Token Authentication de Django REST Framework.
+2. JWT mediante `djangorestframework-simplejwt`.
+
+Esto permite conservar compatibilidad con las pruebas realizadas inicialmente mediante Token Authentication y, al mismo tiempo, incorporar tokens JWT con expiración y refresco.
+
+---
+
+## Token Authentication
+
+Para solicitar un token tradicional se utiliza:
 
 ```text
 POST /api/token/
 ```
 
-Después, el token debe enviarse en la cabecera de cada petición:
+El token debe enviarse en la cabecera HTTP:
 
 ```text
 Authorization: Token TOKEN_DEL_USUARIO
@@ -195,17 +209,86 @@ Los tokens reales no deben guardarse en el código, README ni repositorio.
 
 ---
 
-## Endpoints
+## Autenticación JWT
+
+Para obtener un par de tokens JWT se utiliza:
+
+```text
+POST /api/jwt/
+```
+
+La respuesta contiene:
+
+```text
+access
+refresh
+```
+
+El `access token` tiene una duración de 30 minutos.
+
+El `refresh token` tiene una duración de 1 día.
+
+Para generar un nuevo access token se utiliza:
+
+```text
+POST /api/jwt/refresh/
+```
+
+La configuración utilizada es:
+
+```python
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+}
+```
+
+Esto permite utilizar tokens de corta duración y renovarlos sin volver a enviar las credenciales del usuario.
+
+---
+
+## Endpoints principales
 
 | Método | Endpoint | Descripción | Código esperado |
 |---|---|---|---|
-| GET | `/api/registros/` | Lista los registros | 200 |
+| GET | `/api/registros/` | Lista los registros disponibles | 200 |
 | POST | `/api/registros/` | Crea un registro | 201 |
 | GET | `/api/registros/<id>/` | Consulta un registro individual | 200 |
 | PUT | `/api/registros/<id>/` | Reemplaza un registro completo | 200 |
 | PATCH | `/api/registros/<id>/` | Modifica parcialmente un registro | 200 |
 | DELETE | `/api/registros/<id>/` | Realiza borrado lógico | 204 |
-| POST | `/api/token/` | Obtiene un token de autenticación | 200 |
+| POST | `/api/token/` | Obtiene un token tradicional | 200 |
+| POST | `/api/jwt/` | Obtiene access y refresh JWT | 200 |
+| POST | `/api/jwt/refresh/` | Genera un nuevo access token | 200 |
+
+---
+
+## Documentación Swagger
+
+La API incluye documentación automática mediante `drf-spectacular`.
+
+La interfaz Swagger se encuentra disponible en:
+
+```text
+http://127.0.0.1:8000/api/docs/
+```
+
+El esquema OpenAPI está disponible en:
+
+```text
+http://127.0.0.1:8000/api/schema/
+```
+
+Swagger permite visualizar los endpoints disponibles, sus métodos HTTP y la estructura de los datos utilizados por la API.
+
+---
+
+## Endpoints de documentación
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| GET | `/api/docs/` | Interfaz Swagger |
+| GET | `/api/schema/` | Esquema OpenAPI |
 
 ---
 
@@ -217,11 +300,11 @@ Durante las pruebas de la API se comprobaron los siguientes códigos:
 - `201 Created`: creación correcta.
 - `204 No Content`: eliminación correcta.
 - `400 Bad Request`: datos inválidos.
-- `401 Unauthorized`: petición sin token.
+- `401 Unauthorized`: petición sin autenticación.
 - `403 Forbidden`: usuario autenticado sin permiso.
 - `404 Not Found`: registro inexistente.
 
-Las capturas de evidencia se encuentran dentro de:
+Las evidencias se encuentran en:
 
 ```text
 pruebas/
@@ -231,7 +314,7 @@ pruebas/
 
 ## Serializer
 
-La API utiliza el archivo:
+La API utiliza:
 
 ```text
 core/serializers.py
@@ -270,7 +353,7 @@ Los siguientes campos son de solo lectura:
 - `eliminado`
 - `fecha_eliminacion`
 
-`resultado` y `motivo` no pueden ser enviados ni modificados libremente por el cliente.
+`resultado` y `motivo` no pueden ser definidos libremente por el cliente.
 
 Estos valores son calculados por la regla de negocio de GeekMatch Trips.
 
@@ -284,13 +367,13 @@ La regla principal se mantiene en:
 solucion.py
 ```
 
-La API reutiliza la función:
+La API reutiliza:
 
 ```python
 from solucion import decidir
 ```
 
-La lógica no se copia dentro del ViewSet.
+La lógica no se duplica dentro del ViewSet.
 
 Durante CREATE y UPDATE se ejecuta nuevamente `decidir()` utilizando:
 
@@ -298,13 +381,19 @@ Durante CREATE y UPDATE se ejecuta nuevamente `decidir()` utilizando:
 - precio;
 - presupuesto.
 
-Durante una prueba se cambió el nivel de interés de un registro desde un valor alto a `1`.
+Durante una prueba PATCH se modificó el nivel de interés de un registro a:
 
-El resultado fue recalculado automáticamente a:
+```text
+1
+```
+
+y el resultado fue recalculado automáticamente a:
 
 ```text
 No recomendado por baja afinidad
 ```
+
+Esto demuestra que la API reutiliza correctamente la misma regla de negocio de la aplicación original.
 
 ---
 
@@ -319,21 +408,21 @@ Se comprueba que:
 - el precio no sea negativo;
 - el presupuesto no sea negativo.
 
-Cuando los datos no cumplen estas reglas, la API responde con:
+Cuando los datos no cumplen estas reglas, la API responde:
 
 ```text
 400 Bad Request
 ```
 
-y entrega un mensaje indicando el error.
+y entrega un mensaje explicando el error.
 
-Por ejemplo, un nivel de interés igual a `99` fue rechazado correctamente.
+Por ejemplo, durante las pruebas un nivel de interés igual a `99` fue rechazado correctamente.
 
 ---
 
 ## Borrado lógico
 
-La operación DELETE de la API no elimina físicamente los registros de la base de datos.
+La operación DELETE de la API no elimina físicamente los registros de SQLite.
 
 Cuando se ejecuta:
 
@@ -341,7 +430,7 @@ Cuando se ejecuta:
 DELETE /api/registros/<id>/
 ```
 
-se utiliza el método:
+se utiliza:
 
 ```python
 soft_delete()
@@ -353,37 +442,46 @@ El registro queda marcado con:
 eliminado = True
 ```
 
-y se guarda una fecha en:
+y se almacena:
 
 ```text
 fecha_eliminacion
 ```
 
-La API deja de mostrar estos registros porque el ViewSet consulta solamente los registros con:
+La API deja de mostrar estos registros porque el ViewSet consulta únicamente registros con:
 
 ```python
 eliminado=False
 ```
 
-Durante las pruebas se comprobó que el registro continuaba existiendo en SQLite después del DELETE.
+Durante las pruebas se comprobó directamente desde Django que el registro continuaba existiendo en la base de datos después del DELETE.
 
 ---
 
 ## Permisos diferenciados
 
-Los permisos de la API están definidos en:
+Los permisos de la API se encuentran en:
 
 ```text
 core/permissions.py
 ```
 
-Se utilizan los mismos roles definidos para GeekMatch Trips.
+Se mantienen los roles utilizados en GeekMatch Trips.
 
 ### viewer
 
-Puede realizar operaciones de lectura mediante GET.
+Puede realizar:
 
-Si intenta crear, editar o eliminar recibe:
+- GET.
+
+No puede realizar:
+
+- POST;
+- PUT;
+- PATCH;
+- DELETE.
+
+Si intenta realizar una operación no permitida recibe:
 
 ```text
 403 Forbidden
@@ -393,10 +491,16 @@ Si intenta crear, editar o eliminar recibe:
 
 Puede realizar:
 
-- GET
-- POST
+- GET;
+- POST.
 
-Si intenta modificar o eliminar mediante PATCH, PUT o DELETE recibe:
+No puede realizar:
+
+- PUT;
+- PATCH;
+- DELETE.
+
+Si intenta modificar o eliminar recibe:
 
 ```text
 403 Forbidden
@@ -406,21 +510,21 @@ Si intenta modificar o eliminar mediante PATCH, PUT o DELETE recibe:
 
 Puede realizar todas las operaciones disponibles en la API.
 
-Esto permite distinguir entre:
+Esto permite distinguir:
 
 ```text
 401 Unauthorized
 ```
 
-cuando no se proporciona un token válido,
+cuando no existe autenticación válida,
 
-y:
+de:
 
 ```text
 403 Forbidden
 ```
 
-cuando el usuario está autenticado pero no tiene permiso para realizar la operación.
+cuando el usuario está autenticado pero no posee autorización para realizar la operación.
 
 ---
 
@@ -432,11 +536,12 @@ La configuración principal se encuentra en:
 geekmatch/settings.py
 ```
 
-Se utiliza:
+Actualmente se utiliza:
 
 ```python
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.TokenAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
@@ -446,26 +551,33 @@ REST_FRAMEWORK = {
         "rest_framework.pagination.PageNumberPagination"
     ),
     "PAGE_SIZE": 10,
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 ```
 
 ### Justificación de la autenticación
 
-Se utiliza `TokenAuthentication` porque la API está diseñada para ser consumida por otros programas.
+Se utilizan mecanismos de autenticación porque la API debe identificar quién realiza cada petición.
 
-Cada petición debe identificarse mediante una credencial enviada en la cabecera HTTP.
+Token Authentication se mantiene para conservar compatibilidad con las pruebas originales.
 
-Esto permite proteger los endpoints sin depender de la sesión HTML utilizada en la ES2.
+JWT agrega tokens con expiración y refresco, mejorando el control de las credenciales.
 
 ### Justificación de IsAuthenticated
 
-Se utiliza `IsAuthenticated` como permiso por defecto para evitar que los endpoints queden abiertos accidentalmente.
+Se utiliza:
 
-Después se aplican permisos diferenciados según el rol del usuario.
+```text
+IsAuthenticated
+```
+
+como permiso por defecto para evitar que los endpoints queden abiertos accidentalmente.
+
+Después se aplican permisos específicos según el rol del usuario.
 
 ### Justificación de la paginación
 
-La paginación evita devolver todos los registros en una única respuesta cuando aumenta la cantidad de datos.
+La paginación evita devolver todos los registros en una única respuesta cuando aumenta la cantidad de información.
 
 Se utiliza:
 
@@ -475,11 +587,21 @@ PAGE_SIZE = 10
 
 para entregar los registros en grupos pequeños y mantener controlado el tamaño de las respuestas JSON.
 
+### Justificación de AutoSchema
+
+Se utiliza:
+
+```text
+drf_spectacular.openapi.AutoSchema
+```
+
+para generar automáticamente el esquema OpenAPI utilizado por Swagger.
+
 ---
 
 ## Evidencias de pruebas
 
-Las evidencias se encuentran dentro de:
+Las evidencias se encuentran en:
 
 ```text
 pruebas/
@@ -500,6 +622,9 @@ Las principales pruebas realizadas son:
 10_viewer_post_403.png
 11_normal_post_201.png
 12_normal_patch_403.png
+13_swagger_docs.png
+14_swagger.png
+15_jwt_refresh.png
 ```
 
 Estas pruebas permiten comprobar:
@@ -512,7 +637,10 @@ Estas pruebas permiten comprobar:
 - validaciones;
 - manejo de errores;
 - borrado lógico;
-- permisos diferenciados.
+- permisos diferenciados;
+- documentación Swagger;
+- generación de JWT;
+- refresh de JWT.
 
 ---
 
@@ -520,15 +648,18 @@ Estas pruebas permiten comprobar:
 
 Se aplicaron las siguientes medidas:
 
-- `.env` no se almacena en Git.
-- `db.sqlite3` no se almacena en Git.
-- `.venv` no se almacena en Git.
-- los tokens reales no se escriben dentro del código;
+- `.env` no se almacena en Git;
+- `db.sqlite3` no se almacena en Git;
+- `.venv` no se almacena en Git;
+- las contraseñas reales no se escriben en README;
+- los tokens reales no se escriben en el código;
 - los tokens no se incluyen dentro de las URLs;
 - la API requiere autenticación;
 - los permisos se validan en el servidor;
 - los campos calculados son de solo lectura;
-- el serializer valida los datos recibidos.
+- el serializer valida los datos recibidos;
+- JWT utiliza access tokens con expiración;
+- el refresh token permite renovar el acceso sin volver a enviar la contraseña.
 
 ---
 
@@ -556,16 +687,55 @@ requirements.txt
 manage.py
 ```
 
-La ES3 mantiene además los modelos, migraciones, Django Admin, templates y vistas HTML desarrollados anteriormente.
+La ES3 mantiene además:
+
+- modelos;
+- migraciones;
+- Django Admin;
+- templates;
+- vistas HTML;
+- autenticación de la ES2.
 
 ---
 
-## Estado del proyecto
+## Pruebas automáticas
+
+Para ejecutar las pruebas:
+
+```powershell
+python manage.py test
+```
+
+El proyecto cuenta actualmente con 3 pruebas automáticas.
+
+El resultado esperado es:
+
+```text
+Ran 3 tests
+OK
+```
+
+Para comprobar que los modelos y migraciones se encuentran sincronizados:
+
+```powershell
+python manage.py makemigrations --check --dry-run
+```
+
+Resultado esperado:
+
+```text
+No changes detected
+```
+
+---
+
+## Estado final del proyecto
 
 Se comprobó que:
 
 - las pantallas HTML de la ES2 continúan funcionando;
 - Django REST Framework está instalado;
+- SQLite continúa siendo la base de datos;
 - las migraciones están aplicadas;
 - no existen migraciones pendientes;
 - `/api/registros/` exige autenticación;
@@ -574,4 +744,8 @@ Se comprobó que:
 - los códigos HTTP esperados fueron comprobados;
 - los permisos `viewer`, `normal` y `admin` están diferenciados;
 - el borrado continúa siendo lógico;
-- la regla `decidir()` se reutiliza desde `solucion.py`.
+- la regla `decidir()` se reutiliza desde `solucion.py`;
+- Swagger documenta automáticamente la API;
+- JWT genera access y refresh tokens;
+- el refresh token genera correctamente un nuevo access token;
+- las pruebas automáticas continúan funcionando después de agregar la API.

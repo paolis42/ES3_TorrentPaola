@@ -175,7 +175,7 @@ Utilizar únicamente:
 IsAuthenticated
 ```
 
-permite comprobar que el usuario inició sesión mediante token, pero no diferencia qué operaciones puede realizar cada rol.
+permite comprobar que el usuario está autenticado, pero no diferencia qué operaciones puede realizar cada rol.
 
 Un `viewer` autenticado podría intentar utilizar las mismas rutas que un `admin` si no existiera una segunda validación.
 
@@ -233,7 +233,7 @@ Se comprobó la diferencia entre:
 401 Unauthorized
 ```
 
-cuando no se envía un token,
+cuando no se envía autenticación,
 
 y:
 
@@ -274,8 +274,6 @@ python manage.py shell -c ...
 la salida de Django incluía texto adicional.
 
 Al guardar toda esa salida dentro de una variable, el token contenía espacios y Django REST Framework no lo reconocía correctamente.
-
-La API respondía indicando que las credenciales no habían sido proporcionadas correctamente.
 
 ### Qué corregí
 
@@ -361,6 +359,124 @@ fecha_eliminacion
 
 ---
 
+## Consulta 6: Documentación automática con Swagger
+
+### Qué le pedí a la IA
+
+Consulté cómo generar documentación automática para los endpoints de la API REST.
+
+### Qué respondió la IA
+
+La IA recomendó utilizar `drf-spectacular`, configurando un esquema OpenAPI y una interfaz Swagger.
+
+Se agregaron las rutas:
+
+```text
+/api/schema/
+/api/docs/
+```
+
+### Qué hice finalmente
+
+Instalé:
+
+```text
+drf-spectacular
+```
+
+y configuré:
+
+```python
+"DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema"
+```
+
+Después comprobé desde el navegador que Swagger mostrara correctamente los endpoints GET, POST, PUT, PATCH y DELETE de la API.
+
+Las evidencias se encuentran en:
+
+```text
+pruebas/13_swagger_docs.png
+pruebas/14_swagger.png
+```
+
+---
+
+## Consulta 7: JWT con expiración y refresh
+
+### Qué le pedí a la IA
+
+Consulté cómo agregar autenticación mediante JWT sin eliminar el sistema de Token Authentication que ya funcionaba.
+
+### Qué respondió la IA
+
+La IA recomendó utilizar:
+
+```text
+djangorestframework-simplejwt
+```
+
+y mantener ambos sistemas de autenticación para conservar compatibilidad con las pruebas anteriores.
+
+### Qué revisé o corregí
+
+Inicialmente la configuración de autenticación quedó con `TokenAuthentication` repetido dos veces.
+
+Se corrigió para utilizar:
+
+```python
+"DEFAULT_AUTHENTICATION_CLASSES": [
+    "rest_framework_simplejwt.authentication.JWTAuthentication",
+    "rest_framework.authentication.TokenAuthentication",
+]
+```
+
+De esta forma se mantuvo el sistema anterior y se agregó JWT.
+
+### Qué hice finalmente
+
+Se configuraron los tiempos de duración:
+
+```python
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+}
+```
+
+Se agregaron los endpoints:
+
+```text
+POST /api/jwt/
+POST /api/jwt/refresh/
+```
+
+Durante las pruebas se comprobó que `/api/jwt/` entregara:
+
+```text
+refresh
+access
+```
+
+y que el refresh token permitiera obtener posteriormente un nuevo:
+
+```text
+access
+```
+
+La evidencia final se encuentra en:
+
+```text
+pruebas/15_jwt_refresh.png
+```
+
+### Consideración de seguridad
+
+Los tokens JWT y las contraseñas reales no se almacenaron en el código ni en las evidencias finales.
+
+Para la evidencia final se mostró únicamente que las propiedades `access` y `refresh` fueron generadas correctamente, sin mostrar el contenido de los tokens.
+
+---
+
 # Pruebas realizadas con apoyo de IA
 
 Durante el desarrollo se realizaron pruebas sobre los endpoints.
@@ -377,12 +493,6 @@ Se comprobaron los siguientes códigos:
 404 Not Found
 ```
 
-Las evidencias quedaron almacenadas dentro de:
-
-```text
-pruebas/
-```
-
 Entre las pruebas realizadas se encuentran:
 
 - acceso sin token;
@@ -396,7 +506,16 @@ Entre las pruebas realizadas se encuentran:
 - PATCH con recálculo;
 - POST prohibido para `viewer`;
 - POST permitido para `normal`;
-- PATCH prohibido para `normal`.
+- PATCH prohibido para `normal`;
+- documentación Swagger;
+- generación de JWT;
+- renovación del access token mediante refresh.
+
+Las evidencias quedaron almacenadas dentro de:
+
+```text
+pruebas/
+```
 
 ---
 
@@ -414,6 +533,9 @@ Durante el trabajo fue necesario:
 - corregir la forma en que PowerShell obtenía y almacenaba el token;
 - comprobar manualmente los códigos HTTP;
 - mantener el borrado lógico de la ES2;
+- corregir la configuración inicial de JWT;
+- comprobar Swagger desde el navegador;
+- comprobar el funcionamiento del refresh JWT;
 - evitar incluir tokens y credenciales reales en la documentación.
 
 La IA fue útil para explicar herramientas y proponer estructuras, pero cada propuesta fue revisada mediante pruebas antes de considerarse parte de la solución final.
@@ -422,7 +544,7 @@ La IA fue útil para explicar herramientas y proponer estructuras, pero cada pro
 
 # Conclusión
 
-La inteligencia artificial permitió apoyar la migración de GeekMatch Trips desde una aplicación Django con vistas HTML hacia una aplicación que además ofrece una API RESTful.
+La inteligencia artificial permitió apoyar la evolución de GeekMatch Trips desde una aplicación Django con vistas HTML hacia una aplicación que además ofrece una API RESTful.
 
 La solución final mantiene las funcionalidades de la ES2 y agrega:
 
@@ -431,11 +553,13 @@ La solución final mantiene las funcionalidades de la ES2 y agrega:
 - ViewSet;
 - router;
 - JSON;
-- autenticación mediante token;
+- Token Authentication;
+- JWT con expiración y refresh;
 - permisos diferenciados;
 - validaciones;
 - códigos HTTP;
 - paginación;
+- documentación Swagger/OpenAPI;
 - pruebas mediante cliente HTTP;
 - evidencias de funcionamiento.
 
